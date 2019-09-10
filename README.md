@@ -6,64 +6,63 @@ This tutorial will show you how to deploy your own registry on Kubernetes for st
 
 ![Registry](/images/registry.png)
 
-You will learn how each part works together by following the tutorial.
+You will learn how each part in the image above works together by following the tutorial.
 
 ### Do I need my own container registry?
 
 The primary purpose of a container registry is to store and host artifacts packaged in the [Docker or OCI-image format](https://blog.docker.com/2017/07/demystifying-open-container-initiative-oci-specifications/).
 
-At present there are managed registries for container images offered by almost every cloud provider. Even companies who do not offer compute are starting to offer registries such as [jFrog](https://jfrog.com), [GitLab.com](https://docs.gitlab.com/ee/user/project/container_registry.html), [Docker Inc](https://hub.docker.com), and [GitHub.com](https://github.com/features/package-registry).
+At present there are managed registries for container images offered by almost every cloud provider. Even companies who do not offer compute resources are starting to offer registries, such as [jFrog](https://jfrog.com), [GitLab.com](https://docs.gitlab.com/ee/user/project/container_registry.html), [Docker Inc](https://hub.docker.com), and [GitHub.com](https://github.com/features/package-registry).
 
-So why would you want to set up your own?
+So why would you want to set up your own? Here are a few reasons:
 
-* latency
+* Latency
 
-Hosting a registry inside your Kubernetes cluster is the fastest possible way to push and pull images. This matters for use-case such as auto-scaling and affects the overall speed to deploy from a CI/CD pipeline.
+Hosting a registry inside your Kubernetes cluster is the fastest possible way to push and pull images. This matters for use-cases such as auto-scaling and affects the overall speed to deploy from a CI/CD pipeline.
 
-* costs
+* Costs
 
-Bandwidth in and out of a datacentre is rarely free, let alone across regions. By hosting Docker images where they are produced and consumed keeps costs to the absolute minimum.
+Bandwidth in and out of a datacentre is rarely free, let alone across regions. Hosting Docker images where they are produced and consumed keeps costs to the absolute minimum.
 
-* regulations
+* Regulations
 
-Some regulations and legal restrictions such as GDPR may mean that storing artifacts with a SaaS provider is just not tenable.
+Some regulations and legal restrictions, such as GDPR, may mean that storing artifacts with a SaaS provider is just not tenable.
 
-* security
+* Security
 
-Although we don't explore it in the scope of this tutorial, additional security can be added to self-hosted registries using Open Source software like the [CNCF's Harbor](https://goharbor.io). Harbor scans Docker images for CVEs and other vulnerabilities.
+Although we don't explore it in the scope of this tutorial, additional security can be added to self-hosted registries using Open Source software like the [CNCF's Harbor](https://goharbor.io). Harbor scans Docker images for [CVEs](https://en.wikipedia.org/wiki/Common_Vulnerabilities_and_Exposures) and other vulnerabilities.
 
-* automation & portability
+* Automation & portability
 
-You may be able to automate a hosted registry on AWS, but completely different code is required to automate a registry on GCP. By using an Open Source registry that we can self-host, we regain the portability aspect.
+You may be able to automate a hosted registry on AWS, but completely different code is required to automate a registry on GCP. By using an Open Source registry that we can self-host, we regain portability, allowing you to host your project where you want.
 
-* ease of use
+* Ease of use
 
 It is relatively easy to integrate one or more registries into an existing Kubernetes cluster, in any availability region that you choose.
 
-### Pre-reqs
+### Pre-requisites
 
-* A domain name, or sub-domain which you own. You need to be able to update DNS A records for your domain. I bought mine at [domains.google](https://domains.google).
+* A domain name, or sub-domain which you own. You need to be able to update `DNS A records` for your domain. I bought mine at [domains.google](https://domains.google).
 
-* [Docker](https://www.docker.com/) - we'll use a Docker container to generate some of our configuration
+* [Docker](https://www.docker.com/) - we'll use a Docker container to generate some of our configuration.
 
-* [Kubernetes](https://kubernetes.io/) - this tutorial is written with k3s in mind, but also works on Kubernetes with a few tweaks.
+* [Kubernetes](https://kubernetes.io/) - this tutorial is written with k3s in mind, but also works on full Kubernetes with a few tweaks.
 
-  If you're a Civo user, then we'll be hosting our registry on [Civo Cloud](https://civo.com). You can use [k3sup (ketchup)](https://www.civo.com/learn/kubernetes-on-civo-in-5-minutes-flat) to deploy Kubernetes on your own Instances within a few minutes. If you have access to the #Kube100 program, then you can use the managed k3s service.  
+  If you're a Civo user, then we'll be hosting our registry on [Civo Cloud](https://civo.com). You can use [k3sup (ketchup)](https://www.civo.com/learn/kubernetes-on-civo-in-5-minutes-flat) to deploy Kubernetes on your own Instances within a few minutes. If you have access to the [#Kube100 program](https://www.civo.com/kube100), you can use the managed k3s service available on the program.
 
-* [helm](https://helm.sh) - a packaging tool used to install cert-manager and docker-registry
-  Some developers have concerns about using helm's server-side component called `tiller`. Rest assured, you can use the `helm template` command to avoid installing `tiller` if it bothers you.
+* [helm](https://helm.sh) - a packaging tool used to install cert-manager and docker-registry. If you prefer to not use helm's server-side component called `tiller`, rest assured you can use the `helm template` command to avoid installing `tiller`.
 
 * [cert-manager](https://github.com/jetstack/cert-manager) - a tool by [JetStack](https://jetstack.io/) which provides and renews TLS certificates from [LetsEncrypt](https://letsencrypt.org).
 
-* [docker-registry](https://hub.docker.com/_/registry) - This is a helm chart for Docker's own open source registry
+* [docker-registry](https://hub.docker.com/_/registry) - This is a helm chart for Docker's own open source registry.
 
-* [nginx-ingress](https://kubernetes.github.io/ingress-nginx/) - The Nginx IngressController configures instances of [Nginx](https://nginx.com) to handle incoming HTTP/s traffic.
+* [nginx-ingress](https://kubernetes.github.io/ingress-nginx/) - The Nginx IngressController configures instances of [Nginx](https://nginx.com) to handle incoming HTTP/S traffic.
 
-> Note: If you are using k3s, you can skip installing Nginx IngressController
+> Note: If you are using `k3s`, you can skip installing Nginx IngressController
 
 ### Tutorial
 
-We'll first install helm, then tiller, then Kubernetes users can add [Nginx](https://nginx.com/) in *Host* mode and k3s users can skip this because they will be using [Traefik](https://traefik.io). After that we'll add cert-manager and an Issuer to obtain certificates, followed by the registry. After everything is installed, we can then make use of our registry using the password created during the tutorial. You'll finish off by testing everything end-to-end, and if you get stuck, there are some helpful tips on how to troubleshoot.
+We'll first install `helm`, then `tiller`, then Kubernetes users can add [Nginx](https://nginx.com/) in *Host* mode and k3s users can skip this because they will be using [Traefik](https://traefik.io). After that we'll add cert-manager and an Issuer to obtain certificates, followed by the registry. After everything is installed, we can then make use of our registry using the password created during the tutorial. You'll finish off by testing everything end-to-end, and if you get stuck, there are some helpful tips on how to troubleshoot.
 
 Some components are installed in their own namespaces such as cert-manager, all others will be installed into the `default` namespace. You can control the namespace with `kubectl get --namespace/-n NAME` or `kubectl get --all-namespaces/-A`.
 
@@ -85,7 +84,7 @@ For Windows users, go to [helm.sh](https://helm.sh).
 
 #### Install tiller
 
-* Create RBAC permissions for tiller
+* Create Role-Based Access Control permissions for tiller:
 
 ```sh
 kubectl -n kube-system create sa tiller \
@@ -94,7 +93,7 @@ kubectl -n kube-system create sa tiller \
   --serviceaccount=kube-system:tiller
 ```
 
-* Install the server-side Tiller component on your cluster
+* Install the server-side Tiller component on your cluster:
 
 ```sh
 helm init --skip-refresh --upgrade --service-account tiller
@@ -112,7 +111,7 @@ deployment "tiller-deploy" successfully rolled out
 
 #### Your built-in IngressController with k3s
 
-Given that neither Civo's k3s service nor k3sup offer a cloud LoadBalancer, we need to use an IngressController. Fortunately k3s comes with one called [Traefik](https://traefik.io/).
+k3s comes with a load balancer called [Traefik](https://traefik.io/). If you are not using using a k3s service, we will need to set up an IngressController. 
 
 For k3s, don't install an IngressController, you already have one, skip ahead.
 
@@ -126,7 +125,7 @@ helm install stable/nginx-ingress --name nginxingress --set rbac.create=true,con
 
 #### Install cert-manager
 
-You can now install cert-manager, the version used is v0.9.1.
+You can now install cert-manager, the version used in this guide is v0.9.1. Check on the [cert-manager page](https://github.com/jetstack/cert-manager) for the appropriate version number to edit into the commands below.
 
 ```sh
 # Install the CustomResourceDefinition resources separately
@@ -159,7 +158,7 @@ See also: [cert-manager v0.9.0 docs](https://docs.cert-manager.io/en/release-0.9
 
 The way that cert-manager issues certificates is through an [Issuer](https://docs.cert-manager.io/en/release-0.9/tutorials/acme/http-validation.html). The `Issuer` can issue certificates for the namespace it is created in, but a `ClusterIssuer` can create certificates for any namespace, so that's the one we will use today.
 
-Save `issuer.yaml`:
+Save the following as `issuer.yaml`:
 
 ```yaml
 apiVersion: certmanager.k8s.io/v1alpha1
@@ -185,7 +184,7 @@ spec:
 
 * Edit the file:
 
-Edit the line: `email: user@example.com`.
+Edit the line: `email: user@example.com` to use your email address.
 
 If using Nginx instead of k3s and Traefik, then edit the following:
 
@@ -210,7 +209,7 @@ Look for it to become `Ready`.
 
 #### Configure DNS
 
-For this tutorial a domain `on-k3s.dev` was purchased from Google Domains to show a full worked example.
+For this tutorial a domain `on-k3s.dev` was purchased from Google Domains to show a fully working example. If you are using a different domain registrar the following screens will look broadly similar.
 
 ![](/images/buy-dns.png)
 
@@ -218,7 +217,7 @@ Once you have purchased your domain, you need to point the DNS records at the ho
 
 ![](/images/add-dns.png)
 
-You can find your IP addresses with the Civo UI, or by typing in `civo instance ls` through the CLI.
+You can find your IP addresses with the Civo Dashboard UI, or by typing in `civo instance ls` through the [CLI](https://github.com/civo/cli).
 
 #### Install the registry
 
@@ -291,8 +290,8 @@ spec:
 
 Update the file:
 
-* Everywhere that you see `registry.example.com`, replace it for your domain.
-* If using Nginx, then change this line: `kubernetes.io/ingress.class:`
+* Everywhere that you see `registry.example.com`, replace it with your domain.
+* If using Nginx, then change this line: `kubernetes.io/ingress.class:` to say `"nginx"`
 
 Note the special setting: `.ingress.kubernetes.io/proxy-body-size: 50m`. This value can be customized and allows large Docker images to be stored in the registry.
 
